@@ -14,12 +14,12 @@ import pyttsx3                      #Text to speech response package
 import playsound                    #Capable of playing sounds
 from newsapi import NewsApiClient   #News headlines API lib
 
-owAPI = "7ade79d71842d8460d8b3541f6e9932c"  #Insert your API key to Open Weather Maps here
-spotifyID = "2b77b193ab024c0d9810e9730f0b1aa5"  #Insert Spotify Client ID here
-spotifySecret = "db859f8059b04163b728ff15a24c2852"  #Insert Spotify Client Secret here
-spotifyRefreshToken = "AQAMLXbRwBvzkGz4_BvjtLbaQgd6M_qExg3O7wzFFMnIA8oh6V_Zil4tkF4CHIDQzT1d7tM0FRYeKIPR1u_Xq9AmODDtUKu944LheXQBuuqjPEgDnCKUcOeQ3nDd4kXSnNg"
-spotifyRefreshHeader = "Authorization: Basic MmI3N2IxOTNhYjAyNGMwZDk4MTBlOTczMGYwYjFhYTU6ZGI4NTlmODA1OWIwNDE2M2I3MjhmZjE1YTI0YzI4NTI="
-newsAPIkey = "07e899721adf4b4ca27a64bf9d2bb249" #Insert your API key to NewsAPI here
+owAPI = #Insert your API key to Open Weather Maps here
+spotifyID = #Insert Spotify Client ID here
+spotifySecret = #Insert Spotify Client Secret here
+spotifyRefreshToken = 
+spotifyRefreshHeader = 
+newsAPIkey = #Insert your API key to NewsAPI here
 
 #Initialise the News API
 newsapi = NewsApiClient(newsAPIkey)
