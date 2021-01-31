@@ -14,15 +14,24 @@ import pyttsx3                      #Text to speech response package
 import playsound                    #Capable of playing sounds
 from newsapi import NewsApiClient   #News headlines API lib
 
-owAPI = #Insert your API key to Open Weather Maps here
-spotifyID = #Insert Spotify Client ID here
-spotifySecret = #Insert Spotify Client Secret here
-spotifyRefreshToken =
-spotifyRefreshHeader =
-newsAPIkey = #Insert your API key to NewsAPI here
+#These Keys are stored on my local, get your own!
+try:
+    with open("../JeevesKeys.txt", "r") as f:
+        content = f.readlines()
+        owAPI = content[0] #Insert your API key to Open Weather Maps here
+        spotifyID = content[1] #Insert Spotify Client ID here
+        spotifySecret = content[2] #Insert Spotify Client Secret here
+        spotifyRefreshToken = content[3]
+        spotifyRefreshHeader = content[4]
+        newsAPIkey = content[5] #Insert your API key to NewsAPI here
 
-#Initialise the News API
-newsapi = NewsApiClient(newsAPIkey)
+        #Initialise the News API
+        newsapi = NewsApiClient(newsAPIkey)
+except:
+    print("Without a set of keys and secrets for the APIs in this project,")
+    print("including Spotify, NewsAPI and OWAPI, the functionality of Jeeves is diminished.")
+    print("Open the code and find where the keys are opened in a related .txt file,")
+    print("You will need to replace this with your own file, or create one. Please modify as necessary.")
 
 class TTS:
     engine = None
@@ -660,5 +669,3 @@ def Jeeves():
         print("I'm shutting down now sir.")
         tts.speak("I'm shutting down now sir.")
         attending = False
-
-device = ["f21be663b348225da2fdb929b4f3ce814164db81"]
