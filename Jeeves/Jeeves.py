@@ -660,37 +660,3 @@ def Jeeves():
         print("I'm shutting down now sir.")
         tts.speak("I'm shutting down now sir.")
         attending = False
-
-
-"""spotifygetURL = "https://accounts.spotify.com/authorize"
-spotifypostURL = "https://accounts.spotify.com/api/token"
-p = { 'client-id': '2b77b193ab024c0d9810e9730f0b1aa5', 'response-type': 'code', 'redirect-uri': 'jeeves://callback' }
-postparams = { 'grant_type': "authorization_code", 'code': 'AQCGWwY4DZcEpK4Xse3kB_-vIvOFTEFbirpGad3xjCMkm6LYt-8mqfBLc9AD2KR0JcxeTy_gfRcMpVvpE01TLrXM4nzFhvIZ9Nwn8Adtrjwcc5_P-xrpXlWsWyzYcbY4TL_bBO7X5akskr5al2GrD-HURnLO1eJglPaIONBp-PcDKEbIoLuTgJODYpWTHt_mHrDM3q_hasb_H4B852o9Nh9r9Jb2FODDIi14fFzlk131p6xrVwo9cfK_GcNghGKlp-mVcSWvcXrJgRjsY5oNWgVA3JoNYma2c7_82eJmxb2laQHvSDHYUvvT2vqeeyutFC-gks6WG9neux7lb4xmZVLNSmIxlFDiCaOQBEI7675psujUL3jvzsOn283m5-vK-21WiKaCoZq2ePGLhFBdiazqbT5MDkuWgG1Op41DaDnhLMmk2Um-B_lyzdyih0_8oljeEEQUzziFYzDR2EaYki1rN5-7GBW34OkjFGo', 'redirect-uri': 'http%3a%2F%2Fewanmiles%2Ecom' }
-r = requests.get(url = spotifyURL, params = p)
-print(r.url)
-print(r.status_code)
-print(r.text)
-
-r = requests.get('https://accounts.spotify.com/authorize?client_id=2b77b193ab024c0d9810e9730f0b1aa5&response_type=code&redirect_uri=http%3a%2F%2Flocalhost%3a29486&scope=streaming%20user-read-playback-state%20user-read-private%20user-modify-playback-state%20playlist-modify-public%20user-library-modify%20user-read-playback-position%20playlist-read-private%20app-remote-control%20playlist-modify-private%20user-library-read')
-print(r.url)
-
-code = 'AQCGWwY4DZcEpK4Xse3kB_-vIvOFTEFbirpGad3xjCMkm6LYt-8mqfBLc9AD2KR0JcxeTy_gfRcMpVvpE01TLrXM4nzFhvIZ9Nwn8Adtrjwcc5_P-xrpXlWsWyzYcbY4TL_bBO7X5akskr5al2GrD-HURnLO1eJglPaIONBp-PcDKEbIoLuTgJODYpWTHt_mHrDM3q_hasb_H4B852o9Nh9r9Jb2FODDIi14fFzlk131p6xrVwo9cfK_GcNghGKlp-mVcSWvcXrJgRjsY5oNWgVA3JoNYma2c7_82eJmxb2laQHvSDHYUvvT2vqeeyutFC-gks6WG9neux7lb4xmZVLNSmIxlFDiCaOQBEI7675psujUL3jvzsOn283m5-vK-21WiKaCoZq2ePGLhFBdiazqbT5MDkuWgG1Op41DaDnhLMmk2Um-B_lyzdyih0_8oljeEEQUzziFYzDR2EaYki1rN5-7GBW34OkjFGo'
-resp = requests.post(url = spotifypostURL, auth = {"Authorization": "Basic {0}".format(base64Message) , data = postparams)
-resp.url
-resp.status_code
-print(resp.url)
-print(json.dumps(resp.json(), indent=2))
-
-token = resp.json()['access_token']
-
-message = f"2b77b193ab024c0d9810e9730f0b1aa5:db859f8059b04163b728ff15a24c2852"
-messageBytes = message.encode('ascii')
-base64Bytes = base64.b64encode(messageBytes)
-base64Message = base64Bytes.decode('ascii')
-print(base64Message)
-
-headers = {
-
-resp = requests.post('https://accounts.spotify.com/api/token?grant_type=authorization_code&code=AQDgX33ZFv8PTSU7oTT6fdysooSM8MYF30u4n9_hEKmuYo2Qf3d_TfAq9Z1uoonlvpGjipqv2BVNG1qsTQ7s9EexBZjGTgsD4_sVOuZvy_n8WHb7PpZaL6WAZTfHvev7DW_MVhKtQrbxAMdVn4MpC6K_Do8wMelaNHnHCW9aUZv6NOL-YfKTXPiykSLdb5vbX50Wf_u1NmmqAxxCUq-mYO4CCszvoGCgxr607_b70lqXDLEILlTFD2lHcz3zi1xOv7DuATyavQNtTztIuwhWdTj6LQnZQgk9fWEn4Xx_LtaVbI3AilvHG7smwyHSfFsoKVuj6LdJdKcsKMtQJBikecfo4orSt_dPZbu7VUdiE0B5tGohW0BEVdX_dnj8YVaw219A0e6x1Lg0j0lnX7gWArqothq0MxuCGQ_9i2MiQUoXImaKTs2unF2MErARvAfg4SvajUHMnvWVNzpGQOuDRGC8do1wHPNQYqdL3zJHsA&redirect_uri=http%3a%2F%2Flocalhost%3a29486', headers = {"Authorization": "Basic {0}".format(base64Message) })"""
-
-device = ["f21be663b348225da2fdb929b4f3ce814164db81"]
