@@ -1,971 +1,1480 @@
-#######################################################################################################################################################################
+#####################################################################################################################################################################
+# DERIVATIVE CALCULATOR
+# Ewan Miles - 25/09/2020
+# This code is entirely open-source and thus is editable by anyone.
+#----------------------------------------------------------------------#
+# This program is essentially a library of functions, with "diff" incorporating all others at one point or another.
+# As there is no GUI and the file is not an executable, it will need to be run in a script editor capable of running a python session.
+# This means it can be run in the terminal; I personally call it in Visual Studio Code.
+#----------------------------------------------------------------------#
+# The code is split up below into various sections:
+# > BASE handles any input processing, e.g. separating terms, finding coefficients or subject variables, etc;
+# > MULTIPLICATIVE handles all the functions used in multiplications of expressions;
+# > DIVISIVE handles all the functions used in division of expressions;
+# > DIFFERENTIATION handles all of the different types of differentiation included in this script.
+#----------------------------------------------------------------------#
+# The function "diff()" at the end of DIFFERENTIATION is the final product of all the work in the script.
+# It can handle differentiation for simple variables, trig functions, products, e, ln, and various combinations of each.
+# To help you understand, I have left in my TESTING section at the bottom, which will print all of the differentation results of over 200 expressions.
+# To see the results, run the whole TESTING section at once; it will print each expression alongside its first derivative.
+#----------------------------------------------------------------------#
+# I've tried to prepare the script for as many false inputs as possible - which is the main reason the function "brackets()" exists.
+# This is meant to allow you to include as many brackets as you like in the expression, while helping the script run regardless.
+# There are a few exceptions, where I have included my own raised errors.
+# These include putting brackets around powers of e, or brackets around the content of ln.
+#----------------------------------------------------------------------#
+# The logic in the script isn't perfect - if what you're looking for doesn't work the first time, play around with it!
+# Play around with the code and add to it/see what stuff does/use it for any means.
+# Thanks for using my script! I hope you get all you want from it.
+#####################################################################################################################################################################
 
-# FIRST DERIVATIVE CALCULATOR #
-# Incorporated: basic variables ("x"), e, ln, sin, cos, tan, csc, cot, sec, arctan, arccos, arcsin, quotients ("x/y")
+### DICTIONARIES #############################
+trigrecip = {
+    # Reciprocates trig functions for division/multiplication
+    "sin": "csc",
+    "cos": "sec",
+    "tan": "cot",
+    "csc": "sin",
+    "sec": "cos",
+    "cot": "tan"
+}
 
-# This is a long script and thus, depending on your processor, will run slowly after around 150-200 inputs.
-# It is suggested you re-run either the kernel or the script at this stage to clear the terminal and return to the fastest speeds.
+trigmult = {
+    # Certain simplified multiplications of trig functions
+    "tancos": "sin",
+    "costan": "sin",
+    "csccos": "cot",
+    "coscsc": "cot",
+    "csctan": "sec",
+    "tancsc": "sec",
+    "sinsec": "tan",
+    "secsin": "tan",
+    "cotsin": "cos",
+    "sincot": "cos",
+    "cotsec": "csc",
+    "seccot": "csc",
+    "sincsc": "",
+    "cossec": "",
+    "tancot": "",
+    "cscsin": "",
+    "seccos": "",
+    "cottan": ""
+}
 
-# All expressions should ONLY be input in STRING format, i.e. "4x^2", with quote marks, not 4x^2.
+trigdiff = {
+    # The first derivatives of each trig function used in diff functions
+    "sin": "cos",
+    "cos": "-sin",
+    "tan": "sec^2",
+    "csc": ("-cot","csc"),
+    "sec": ("tan","sec"),
+    "cot": "-csc^2"
+}
+##############################################
 
-# The diff(x) function has incorporated all sub-functions for derivatives and can differentiate any of the variables/functions above.
-# Surrounding the expression with brackets will stop the code from working, i.e. diff("(x^2)") will not return your derivative.
+### BASE #####################################
+def brackets(x):
+    """
+    Removes all brackets (parentheses, "(",")" ) from an input string, with input
 
-# There is a Maclaurin Expansion function being built at the bottom of the script. It currently has little capability beyond basics, but feel free to test it.
+    - x: Expression possibly containing brackets (str)
 
-# Any 'check' functions work by slicing strings according to what is being sought.
-# e.g. coeffcheck(x) will slice the string to look for the coefficient, varcheck(x) will look for the subject variable (often "x"), etc.
+    Returns string with all brackets removed
+    """
+    while "(" in x:
+        x = x.replace("(","") #Replace opening paren with nothing while present in expression
+    while ")" in x:
+        x = x.replace(")","") #Replace closing paren with nothing while present in expression
+    return x
 
-# The code has been developed to be as bracket-independable as possible, i.e. diff("(-2)sin(-2x)") and diff("-2sin-2x") should output the same derivative.
-# THIS DOES COUNT on the user not incorporating brackets into strange places, e.g. diff("2(sin)4x")
+def rotate(x):
+    """
+    Rotates a list's elements so that the first moves to the last position, with input
 
-# Many functions incorporate other functions, which in turn incorporate the first function, which means it can't all just be run in one cell.
-# The best approach is to run the whole code as a cell, then run the diff(x) function, following what you need to run after each error you run into.
+    - x: list of any variable types (arr)
 
-#######################################################################################################################################################################
+    Returns the list with x[0] in x[-1] position, each other element moved to front end of list one place, e.g.
+    [1, 2, 3, 4] -> [2, 3, 4, 1]
+    """
+    xnew = [i for i in x[1:]] #New array of elements from excluding first element of input
+    xnew.extend([x[0]])       #Extend new array with first element from input
+    return xnew
 
-import math
-import time
+def func(x):
+    """
+    Finds function string, or list of functions, found within an expression, with input
 
-def string_iteration(y):
-    ### Function that iterates over each character in a string and returns any non-digit characters in a string ###
-    ### e.g. "tan(2x^2)" -> "tan(x^)" ###
-    index = 0
-    # While loop checks each character, replaces any digits with empty strings
-    while index < len(y): 
-        character = y[index] #slices y to return character at index
-        if character.isdigit() == True:
-            y = y.replace(character, "")
-        else:
-            index += 1  #move to next string index
-    return y
+    - x: Expression possibly containing a function (str)
 
-string_iteration("")
+    Returns either single function (str) or list of functions (arr);
+    If it is a list of functions, they will be ordered by occurrence within expression, e.g.
+    func("tanxsinx") -> ["tan", "sin"]
+    """
+    functions = ["sin","cos","tan","arccos","arcsin","arctan","ln","sin^-1","cos^-1","tan^-1","csc","sec","cot"] #List of functions to search for, add any here
+    f_array = [] #Empty array for functions found in expression
+    for f in functions:
+        loc = x.find(f) #Attempt to find each function within expression
+        xtrimmed = x #Necessary to create xtrimmed to iterate through at end of while loop
 
-def arrange(y):
-    ### Function to remove each index in an array that takes the value -1, then organises the list in rising numerical order ###
-    ### Used mainly for returning and ordering a list of functions ###
-    ### e.g. arrange([-1,4,2,-1,-1,5,-1,-1]) -> [2,4,5] ###
-    index = 0
-    length = len(y)
-    while index < length:
-        number = y[index]
-        if number == -1:
-            y.remove(number)   #remove a -1 element
-            length -= 1   #change length as an element has been removed, others ahead move left
+        while loc != -1:
+            if f == "sin^-1":
+                f_array.append(["arcsin",loc]) #Correct inverse sin given by -1 power
+            elif f == "cos^-1":
+                f_array.append(["arccos",loc]) #Correct inverse cos given by -1 power
+            elif f == "tan^-1":
+                f_array.append(["arctan",loc]) #Correct inverse tan given by -1 power
+            elif (loc+len(f) < len(xtrimmed)) and (xtrimmed[loc+len(f)] == "^"):
+                f_array.append([xtrimmed[loc:loc+len(f)+2],loc]) #Append functions with power to f_array if present, e.g. sin^2, cos^3
+            else:
+                f_array.append([f,loc]) #Append found function to f_array along with its position in string
+            
+            
+            xtrimmed = xtrimmed.replace(f,len(f)*"_",1) #xtrimmed now gets rid of all occurrences of current function so loop doesn't go infinitely
+            loc = xtrimmed.find(f)
+
+    f_array.sort(key=lambda x: x[1]) #Locs added so that array can be ordered by position in expression string here
+    f_array = [i[0] for i in f_array] #Get rid of all indexes from list, leaving only functions
+    
+    if len(f_array) == 1:
+        f_array = f_array[0] #Return only function string if only one function
+    elif f_array == []:
+        f_array = "" #Return empty string if no functions
+
+    return f_array 
+
+def separate(x):
+    """
+    Separates functions that are to a power within a list, e.g. separate(["sin^3x"]) -> ["sinx","sinx","sinx"]
+    Works with lists that include expressions without functions, with input
+
+    - x: List of terms in an expression, or just general list of strings (arr)
+
+    Returns the same array with any powered function terms separated
+    """
+    #New array for separated terms
+    xnew = []
+
+    for i in x:
+        #Append e terms in case function in e power
+        if "e^" in i:
+            xnew.append(i)
             continue
-        index += 1
-    # Arrange in rising numerical order
-    y.sort()
-    return y
 
-arrange([-1,4,2,-1,-1,5,-1,-1])
+        f = func(i)
+        if f != "":
+            if pwr(f) != "1": #Case of power of function not equal to 1, e.g. sin^2(x)
+                inew = i
+                c = ""
 
-def general_replace(x, y, z):
-    ### Function that iterates over a list replacing any elements 'x' with 'y' ###
-    # e.g. general_replace(4,5,[1,3,5,4,6,9,4,5]) -> [1,3,5,5,6,9,5,5]
-    if isinstance(z,list) == True:
-        index = 0
-        while index < len(z):
-            term = z[index]
-            if term == x:
-                z[index] = y
-            index += 1
+                #Check for coefficient, remove
+                if co(i) != "1":
+                    c = co(i)
+                    inew = i[len(c):]
+                fn = inew[:inew.index("^")]  #Take function
+                cont = inew[inew.index(pwr(f))+1:]  #Take content
+
+                #Add power number of functions to funcs array
+                funcs = []
+                k = 0
+                while k < int(pwr(f)): #Iterate until k reaches power of function, e.g. until 3 for cos^3(x)
+                    funcs.append(fn+cont) #Append single power function to list each time
+                    k += 1
+
+                #Check for coefficient, add to first if exists
+                funcs[0] = c+funcs[0]
+
+                xnew.extend(funcs) #Add funcs to xnew
+            else:
+                xnew.append(i) #Case of function being to power of 1, e.g. sinx, just append as is
+        else:
+            xnew.append(i) #Case of no function present in string, append as is
+    return xnew
+
+def co(x):
+    """
+    Finds coefficient of an expression, with input
+
+    -x: Expression containing a coefficient (str)
+
+    Returns the (NUMERICAL ONLY) coefficient of the expression (str)
+    Does not return variable coefficients, just numbers, e.g. 2x^2e^(5x) -> 2, not 2x^2
+    Will return numeric inputs as themselves, e.g. co("4") -> "4"
+    """
+    x = brackets(x) #Remove brackets
+
+    #Check if input is already a number using float(), return input if numeric
+    try:
+        x = int(x)
+        x = str(x)
+        return x
+    except ValueError:
+        pass
+
+    #Remove negative if present so it doesn't break following logic
+    if x.find("-") == 0:
+        negative = True
+        x = x[1:]
+
+    f = func(x) #Find function if present
+    if f != "": 
+        if type(f) == str: #Single function, f is string
+            cl = x.find(f)
+        elif type(f) == list: #Multiple functions, f is array
+            cl = x.find(f[0])
+        if x[cl-1] == "(": #Account for possible opening paren before function
+            x = x[:cl-1]
+        x = x[:cl] #Slice to the opening of the function, leaving only what comes before it
+    
     else:
-        z = z.replace(x,y)
-    return z
+        i = 0
+        while i < len(x): #Iterate through each index in string
+            char = x[i]   #Current char given by index slice
+            if char == ".": #Skip "." in case of decimal coefficient
+                i += 1
+                continue
+            elif char.isnumeric() == True: #Continue if character is numeric
+                i += 1
+            else:
+                x = x[:i] #Stop when character no longer numeric, i.e. coefficient is finished
+    
+    #Attempt to append negative again if present before
+    try:
+        if negative == True:
+            x = "-" + x
+    except UnboundLocalError: #No negative present
+        pass
 
-general_replace("x","y","xyz")
+    if x == "": #Case of coefficient being 1, i.e. no number at beginning of expression
+        return "1"
+    else:
+        return x
 
-def specific_replace(x, y):
-    ### Function to replace ALL INSTANCES OF A STRING featured in a list with that string only ###
-    ### WARNING - function does not work if list includes integers ###
-    # e.g. specific_replace(['sinx','cosx',2], 'cos') -> ['sinx','cos',2] 
-    # e.g. specific_replace(['actually','no','its','impossible'], 'i') -> ['actually','no','i','i']
-    function = [s for s in x if y in s]   #find all instances of string in elements
-    index = 0
-    while index < len(function):   #iterate through elements
-        x = general_replace(function[index],y,x)   #replace instances of string with desired string
-        index += 1
+def vari(x):
+    """
+    Finds the subject variable of an expression, with input
+
+    - x: Expression containing a variable (str)
+
+    Returns the variable letter (str) or list of variable letters (arr)
+    This function has means to pass over functions, but any random letters within an expression will be treated as variables
+    """
+    f = func(x) #Find function in expression
+    for i in ["(",")","^","-","."]:
+        x = x.replace(i,"")  #Remove non-numeric chars that are not variables, i.e. not letters
+    
+    v = [] #Empty array to fill with variables
+    for i in x:
+        if i not in f: #If character not in function
+            if (i not in v) and (i.isnumeric()==False):
+                if i == "e": #Skip e as not variable
+                    pass
+                else:
+                    v.append(i) #Append any letters to variables list
+
+    if len(v) == 1:
+        v = v[0] #Return string if only one var
+    elif len(v) == 0:
+        v = None #Case of no variables present
+
+    return v
+
+def pwr(x):
+    """
+    Finds the power of an expression, with input
+
+    - x: Expression containing a power (str)
+
+    Returns the power of the expression - this is not limited to variables with power, e.g. x^5
+    For example, pwr("e^(5x)") -> "5x"
+    Breaks down with an expression of multiple terms with powers, e.g. pwr("x^2e^(5x)") -> "2e^(5x"
+    """
+    #Ok I won't lie I can't remember why I included this bit, too scared to remove it
+    #Most comments were written synchronously but I didn't comment this bit
+    #I'm only human
+    try:
+        float(x)
+        return ""
+    except (ValueError,TypeError) as e:
+        pass
+
+    i = 0
+    while i < len(x):
+        char = x[i]
+        if char.isnumeric() == True:
+            break
+        if (i == len(x) - 1) and (char.isnumeric() == False):
+            return "1"
+        i += 1
+
+    c = co(x)
+    v = vari(x)
+    if c == None:
+        c = ""
+    if x.find("(") == 0:
+        if x.find(")") == len(x)-1:
+            x = x[len(c)+1:-1]
+        else:
+            x = x[len(c)+2:]
+    else:
+        x = x[len(c):]
+    loc = x.find("^")
+    if loc != -1:
+        if x.find(")") == len(x)-1:
+            x = x[loc+1:-1]
+        else:
+            x = x[loc+1:]
+    else:
+        if v != None:
+            x = "1"
     return x
 
-specific_replace(['actually','no','its','impossible'], 'i')
+def terms(x):
+    """
+    Separates an expression into distinct terms, for example
+    terms("xe^(x)sinx") -> ["e^x","x","sinx"] with input
 
-def function_replace(y):
-    ### Function that checks all functions in a list and replaces them with JUST the function ###
-    # e.g. function_replace(['sinx','cos5x','2x']) -> ['sin','cos','2x']
-    # Search for each function string
-    sin = [s for s in y if 'sin' in s]
-    cos = [s for s in y if 'cos' in s]
-    tan = [s for s in y if 'tan' in s]
-    arcsin = [s for s in y if 'arcsin' in s]
-    arccos = [s for s in y if 'arccos' in s]
-    arctan = [s for s in y if 'arctan' in s]
-    cot = [s for s in y if 'cot' in s]
-    sec = [s for s in y if 'sec' in s]
-    csc = [s for s in y if 'csc' in s]
-    ln = [s for s in y if 'ln' in s]
-    if arcsin != []:
-        y = specific_replace(y, 'arcsin')
-    if arccos != []:
-        y = specific_replace(y, 'arccos')
-    if arctan != []:
-        y = specific_replace(y, 'arctan')
-    if sin != []:
-        for i in sin:
-            if 'arcsin' in i:
-                continue
-            elif i in y:
-                index = y.index(i)
-                y[index] = 'sin'
-    if cos != []:
-        for i in cos:
-            if 'arccos' in i:
-                continue
-            elif i in y:
-                index = y.index(i)
-                y[index] = 'cos'
-    if tan != []:
-        for i in tan:
-            if 'arctan' in i:
-                continue
-            elif i in y:
-                index = y.index(i)
-                y[index] = 'tan'
-    if ln != []:
-        y = specific_replace(y, 'ln')
-    if cot != []:
-        y = specific_replace(y, 'cot')
-    if csc != []:
-        y = specific_replace(y, 'csc')
-    if sec != []:
-        y = specific_replace(y, 'sec')
-    return y
-        #e.g. arctan and tan both produce != -1 thus the condition has to be more explicit
+    - x: Expression containing any number of distinct terms (str)
 
-function_replace(['cosx','sinx','arcsint'])
+    Returns the separate constituent string terms of the expression (arr)
+    Single term inputs, e.g. sinx, will simply be returned (arr)
+    """
+    #Check negative
+    negative = x.find("-")
+    if negative == 0 or negative == 1:
+        x = x[:negative] + x[negative+1:]
+        negative = True
 
-def functioncheck(y):
-    ### Function to return mathematical function used in an expression ###
-    ### e.g. sin, cos, tan, ln, etc ###
-    y = str(y)
-    function = [] #open an array to add functions to if multiple or single
-    # Search for each function string
-    sin = y.find("sin")
-    cos = y.find("cos")
-    tan = y.find("tan")
-    arcsin = y.find("arcsin")
-    invsin = y.find("sin^-1")
-    arccos = y.find("arccos")
-    invcos = y.find("cos^-1")
-    arctan = y.find("arctan")
-    invtan = y.find("tan^-1")
-    cot = y.find("cot")
-    csc = y.find("csc")
-    sec = y.find("sec")
-    ln = y.find("ln")
-    #e.g. arctan and tan both produce != -1 thus the condition has to be more explicit
-    # Introduce a count so it returns how many functions are in the check
-    function.append(sin)
-    function.append(cos)
-    function.append(tan)
-    function.append(arcsin)
-    function.append(invsin)
-    function.append(arccos)
-    function.append(invcos)
-    function.append(arctan)
-    function.append(invtan)
-    function.append(cot)
-    function.append(csc)
-    function.append(sec)
-    function.append(ln)
-    function = arrange(function)
-    func = []
-    index = 0
-    while index < len(function):
-        term = function[index]
-        if term == function[len(function) - 1]:
-            func.append(y[term:])
+    #Remove coefficient
+    c = x
+    while c.isnumeric() == False:
+        try:
+            c = str(float(c)) #Break the loop if float, isnumeric doesn't accept floats
+            break
+        except:
+            pass
+        c = co(c)
+    if c != "1":
+        x = x[x.index(c)+len(c):]
+
+    #Split by exponents
+    t_array = []
+    loc = x.rfind("e^")
+    if loc == -1:
+        pass
+    else:
+        if x[loc+2] != "(": #Brackets not used on e power
+            raise SyntaxError("Please use brackets around powers of e")
         else:
-            nextterm = function[(index+1)]
-            func.append(y[term:nextterm])
-        index += 1
-    func = function_replace(func)
-    if len(function) > 1:       
-        func.append(len(function)) #append the array of functions with the count if two or more are found
-    elif len(function) == 0:
-        func = "" #return an empty string if no function is found
-    else:
-        func = str(func[0])  #return the function as a string if only one is found
-    return func
+            while "e^" in x:
+                current = x[loc:]
+                close = current.find(")")
+                e = current[:close+1]
+                x = x.replace(e,"")
+                t_array.append(brackets(e))
+                loc = x.rfind("e^")
 
-functioncheck("arctanxsinx")
-
-def varcheck(y):
-    ### Function that cuts the input string to return the variable from an expression ###
-    e = y.find("e^")
-    func = functioncheck(y)
-    if e != -1:
-        y = "e"
+    #Split by logs
+    loc = x.rfind("ln")
+    if loc == -1:
+        pass
     else:
-        openingbracket = y.find("(")
-        closingbracket = y.find(")")
-        if openingbracket == 0:
-            opened = closingbracket + 1
-            y = y[opened:]
-        y = string_iteration(y)
-        #check is function is a list (i.e. multiple functions), carry out role on each one by iterating through list
-        if isinstance(func, list) == True:
+        if x[loc+2] != "(": #Brackets not used on ln content
+            raise SyntaxError("Please use brackets around the content of ln")
+        else:
+            while "ln" in x:
+                current = x[loc:]
+                close = current.find(")")
+                log = current[:close+1]
+                x = x.replace(log,"")
+                t_array.append(brackets(log))
+                loc = x.rfind("ln")
+
+    #Remove rest of brackets
+    x = brackets(x)
+
+    #Split by function
+    f = func(x)
+    funcs = []
+    if type(f) == list:
+        for i in reversed(f): #Easier to slice when iterating backward
+            loc = x.rfind(i)
+            funcs.append(x[loc:])
+            x = x[:loc]
+        funcs.append(x) #Append rest of x when all functions accounted for
+        t_array.extend(reversed(funcs)) #Keep functions in order
+    else:
+        t_array.append(x[:x.index(f)])
+        t_array.append(x[x.index(f):])
+
+    #Remove empty strings
+    while "" in t_array:
+        t_array.remove("")
+
+    #Split by variable
+    t_final = []
+    for t in t_array:
+        if "e^" in t or "ln" in t:
+            t_final.append(t) #Append and skip e, ln terms
+            continue
+        while len(t) > 0: #Iterate through terms in list so far
+            term = t
+            count = 0 #Count of variables in expression
             index = 0
-            while index < (len(func)-1):  #iterate over every function in array but NOT count
-                function = func[index]
-                y = y.replace(function, "")
+            for i in term:
+                if type(func(term)) == list: #Check for function
+                    f = func(term)[0] #Take first function if multiple
+                else:
+                    f = func(term)
+                if (i in f) or (i=="^") or (i=="-") or (i.isnumeric() == True): #Skip over letters in functions, or non-letter digits
+                    index += 1
+                    continue
+                else:
+                    count += 1 #Condition that variable is found
+                if count == 2:
+                    term = term[:index]
+                    break
                 index += 1
+            t_final.append(term) #Essentially splits off multiple different variables adjacent in expressions.
+            t = t[len(term):]
+
+    #NOTE: the above section causes terms such as "sinxy" to go to "sinx","y".
+    #THIS PROGRAM IS NOT DESIGNED FOR PARTIAL DERIVATIVES.
+
+    #Add coefficient to first term
+    if c != "1":
+        if len(t_final) == 0: #Case of terms(single number), e.g. terms("2")
+            return [c]
         else:
-            y = y.replace(func,"")
-        y = y.replace("(","")
-        y = y.replace(")","")
-        y = y.replace("^","")
-        y = y.replace("-","")
-        y = y.replace("+","")
-        if len(y) > 1:
-            y = y[0]
-    return y
+            t_final[0] = c + t_final[0]
 
-varcheck("(x^2)(e^2x^2)")
+    #Check negative
+    if negative == True:
+        t_final[0] = "-" + t_final[0]
 
-def coeffcheck(y):
-    ### Function to return a coefficient from an expression ###
-    ### CANNOT be used on a multifunction expression, e.g. sinxcosx ###
-    openingbracket = y.find("(")
-    closingbracket = y.find(")")
-    if openingbracket == 0:
-        opened = openingbracket + 1
-        closed = closingbracket
-        y = y[opened:closed]
-        print(y)
-    negative = y.find("-")
-    if negative == 0:
+    return t_final
+##############################################
+
+### MULTIPLICATIVE ###########################
+#The Multiplicative functions essentially separate the jobs by coefficient/variable/function/log/e.
+#This means that the same expression list can be used in any of them to return the multiplied variables,
+#or the multiplied log terms, or the multiplied coefficient, etc.
+#This simplistic form allows all to be simply concatenated after the fact, leading to the function "multiply".
+##############################################
+def varimult(x):
+    """
+    Multiplies together ONLY the lone variable terms (e.g. x^3,y,g^7) 
+    in a list of expressions to multiply together, with input
+
+    - x: Multiple str expressions (as complex as necessary) (arr)
+
+    Returns the multiplied variable terms only (str)
+    Note, this means the function can be used on, for example, varimult(["sinx","xcosx","x^2e^(5x)"])
+    and will still work, only outputting "x^3".
+    """
+    #Remove brackets
+    xnew = []
+    for i in x:
+        if "e^" in i:
+            if "ln" in i:
+                try:
+                    p = int(i[i.index("ln") - 1]) #Case of ln power, e.g. 2lnsinx -> sin^2x
+                    xnew.extend(p*[brackets(i[i.index("ln")+2:])]) #Append e^ln content without brackets
+                except:
+                    xnew.append(brackets(i[i.index("ln")+2:])) #Append e^ln content without brackets
+                continue
+            else:
+                t = terms(i) #Split expressions into terms
+                xnew.extend([j for j in t if "e^" not in j]) #Append new terms to xnew, excluding e^ terms
+                continue
+        
+        elif "ln" in i and "e^" not in i: #Case of ln but not e^
+            xnew.append(i)
+            continue
+        new = brackets(i)
+        xnew.append(new)
+    x = xnew 
+    #This piece of code was added after the original function, making x=xnew easier than
+    #running through the code to change and possibly breaking it
+
+    #Returning variable if only one in list
+    if len(x) == 1:
+        if func(x[0]) != "":
+            return "" #Only term has function in it, return nothing
+        else:
+            if pwr(x[0]) == "1":
+                return vari(x[0])
+            elif x[0].isnumeric() == True:  #Return nothing if just a number
+                return ""
+            else:
+                return "{0}^{1}".format(vari(x[0]),pwr(x[0]))
+
+    #Creating new list for only variables and powers
+    variables = []
+    xt = []
+    for i in x:
+        xt.extend(terms(i)) #List of terms left in x
+    for i in xt:
+        if func(i) == "": #No function present in term
+            if pwr(i) == "1": #No power on variable
+                variables.append(vari(i)) #Append variable alone
+            else:
+                variables.append("{0}^{1}".format(vari(i),pwr(i))) #Append variable with power
+    variables.sort(key=lambda x: x[0]) #Sort variables by order of occurrence
+
+    #Removing "None" variables
+    if set(variables) == {"None^"}:
+        return "" #All variables are "None^", return nothing
+    for i in variables:
+        if "None^" in i:
+            variables.remove(i)
+
+    #Return list contents if at this point only one variable
+    if len(variables) == 1:
+        return variables[0]
+
+    m = "" #Final string of multiplied terms
+    i = 1
+    npwr = 0
+    while i < len(variables):
+        char = variables[i] #Current character in iteration
+        prevchar =(variables[i-1]) #Character previous
+        npwr += int(pwr(prevchar)) #Power of previous variable
+
+        #If variables not the same (by this point they are ordered, so the same variables will be next to each other)
+        #Append the new power of the previous variable to multiplied output string
+        if vari(char) != vari(prevchar):
+            m += "({0}^{1})".format(vari(prevchar),npwr)
+            npwr = 0 #Reset new power to 0
+
+        #If on the final variable in list
+        if i == len(variables)-1:
+            if vari(char) == vari(prevchar):
+                npwr += int(pwr(char))
+                
+                m += "({0}^{1})".format(vari(char),npwr) #Multiply same variables together
+            else:
+                m += "({0})".format(char) #Add this one to list
+
+        #If the variable is the same as the previous, the iteration automatically accounts for it        
+        i += 1
+
+    while m.find("^1)") != -1:
+        m = m.replace("^1)",")") #Remove powers of 1
+    while m.find("^0") != -1:
+        m = m[:m.find("^0")-2] + m[m.find("^0")+3:] #Remove powers of 0
+    m = m.replace(" ","")
+    return m
+
+def comult(x):
+    """
+    Multiplies together ONLY the coefficients
+    in a list of expressions to multiply together, with input
+
+    - x: Multiple str expressions (as complex as necessary) (arr)
+
+    Returns the multiplied coefficients only (str)
+    Note, this means the function can be used on, for example, comult(["6sinx","xcosx","x^2e^(5x)"])
+    and will still work, only outputting "6".
+    """
+    #Remove brackets
+    xnew = []
+    for i in x:
+        new = brackets(i)
+        xnew.append(new)
+    x = xnew
+
+    coeffs = [] #Empty list for coefficients
+    for i in x:
+        coeffs.append(co(i)) #Append coefficient of each term to list
+
+    #Iterate through coefficients of each list looking for only number terms
+    finals = []
+    i = 0
+    while i < len(coeffs):
+        char = coeffs[i]
+        try:
+            float(char)
+            str(char) #If character cannot be turned into float, not numeric, not coefficient
+        except ValueError:
+            char = co(char)
+        finals.append(char)
+        i += 1
+
+    #Change "-" to "-1" if present
+    while "-" in finals:
+        finals.remove("-")
+        finals.append("-1")
+
+    #Iterate through coeffs to make product
+    product = 1
+    for i in finals:
+        product *= float(i)
+
+    #Attempt to turn float coefficients that are integers, e.g. 3.0, 5.0, to int
+    product = str(product)
+    intcheck = product[product.find(".")+1:]
+    if int(intcheck) == 0:
+        product = str(int(float(product)))
+    
+    if product == "1":
+        return "" #Return nothing if coeff = 1
+    elif product == "-1":
+        return "-" #Return - if coeff = -1
+
+    return product
+
+def funcmult(x):
+    """
+    Multiplies together ONLY the function terms
+    in a list of expressions to multiply together, with input
+
+    - x: Multiple str expressions (as complex as necessary) (arr)
+
+    Returns the multiplied function terms only (str)
+    Note, this means the function can be used on, for example, funcmult(["6sinx","xcosx","x^2e^(5x)"])
+    and will still work, only outputting "sin(x)cos(x)".
+    """
+    #Remove brackets
+    xnew = []
+    for i in x:
+        if "e^" in i:
+            if "ln" in i:
+                try:
+                    p = int(i[i.index("ln") - 1]) #Case of ln power, e.g. 2lnsinx -> sin^2x
+                    xnew.extend(p*[brackets(i[i.index("ln")+2:])]) #Append e^ln content without brackets
+                except:
+                    xnew.append(brackets(i[i.index("ln")+2:])) #Append e^ln content without brackets
+                continue
+            else:
+                for j in terms(i):
+                    if (func(j) != "") and ("e^" not in j):
+                        xnew.append(j)
+                continue
+
+        elif "ln" in i and "e^" not in i: #Case of ln terms not e^
+            xnew.append(i)
+            continue
+        new = brackets(i)
+        xnew.append(new)
+    x = xnew
+
+    #Slice for functions only
+    t = []
+    for i in x:
+        for j in terms(i):
+            if "ln" in j: #Ignore ln as function
+                continue
+            t.append(j)
+    t = [i for i in t if func(i) != ""]
+
+    #Create array of lists containing [func, content]
+    #Where content is what is contained in the subject of the function, e.g. x for sin(x)
+    t_final = []
+    for i in t:
+        t_final.append([func(i),i[i.index(func(i))+len(func(i)):]])
+
+    #Concatenation stage
+    cont = list(set([i[1] for i in t_final]))
+    t = []
+    for i in cont:
+        term = ""
+        for j in t_final:
+            if j[1] == i:
+                if pwr(j[0]) != "1":
+                    term += int(pwr(j[0]))*j[0][:-2]
+                else:
+                    term += j[0]
+        t.append([term,i])
+
+    #Dictionary simplifying stage
+    for i in t:
+        while any(j in i[0] for j in set(trigmult)) == True: #If any combinations of functions that are in dictionary to be simplified
+            for k in set(trigmult):
+                if k in i[0]:
+                    i[0] = i[0].replace(k,trigmult[k]) #Replace combinations with simplified terms, e.g. sinxsecx -> tanx
+
+        #Taking repeated functions to power, e.g. secsec -> sec^2
+        for j in set(trigrecip):
+            if i[0].count(j) > 1: #Remember, still iterating through terms list, hence i and j
+                npwr = i[0].count(j)
+                i[0] = i[0].replace(j,"") #Replace multiple occurrences of function with empty string
+                i[0] += "{0}^{1}".format(j,npwr)
+
+        #Separating concatenated functions
+        i[0] = func(i[0])
+
+    #Final formatting
+    f = ""
+    for i in t:
+        if i[0] == "":
+            f += ""
+        elif type(i[0]) == list:
+            for j in i[0]:
+                f += "{0}({1})".format(j,i[1])
+        else:
+            f += "{0}({1})".format(i[0],i[1])
+
+    return f
+
+def emult(x):
+    """
+    Multiplies together ONLY the e^ terms
+    in a list of expressions to multiply together, with input
+
+    - x: Multiple str expressions (as complex as necessary) (arr)
+
+    Returns the multiplied e^ terms only (str)
+    Note, this means the function can be used on, for example, emult(["6sinx","xcosx","x^2e^(5x)"])
+    and will still work, only outputting "e^5x".
+    """
+    #Remove any terms without e
+    x = [i for i in x if "e^" in i]
+
+    #Remove any terms with e^ln, remove brackets
+    xnew = []
+    for i in x:
+        if "ln" not in i:
+            xnew.append(i)
+    x = [brackets(i) for i in xnew]
+
+    if len(x) == 0:
+        return "" #No e^ terms, return nothing
+    elif len(x) == 1:
+        x = x[0][x[0].index("e^"):] #Only one e^ term
+        return x
+
+    #Grab only powers
+    x = [i[i.index("e^")+2:] for i in x]
+
+    #New power
+    npwr = ""
+    i = 0
+    while i < len(x)-1:
+        p = x[i]
+        npwr += p
+        if x[i+1][0] == "-": #Check negative on next term
+            npwr += " - " #Subtract next term
+            x[i+1] = x[i+1][1:]
+        else:
+            npwr += " + " #No negative, add next term
+        i += 1
+    npwr += x[-1]
+
+    return "e^({0})".format(npwr)
+
+def logmult(x):
+    """
+    Multiplies together ONLY the log terms
+    in a list of expressions to multiply together, with input
+
+    - x: Multiple str expressions (as complex as necessary) (arr)
+
+    Returns the multiplied log terms only (str)
+    Note, this means the function can be used on, for example, emult(["6sinx","xcosx","x^2e^(5x)","ln(2x)"])
+    and will still work, only outputting "ln2x".
+    """
+    #Remove any terms without ln, also remove e^ln
+    xnew = []
+    for i in x:
+        if "ln" in i:
+            xnew.extend(terms(i))
+    for i in xnew:
+        if "e^" in i or "ln" not in i:
+            xnew.remove(i)
+
+    #Slice ln terms for only ln parts of expression
+    xfinal = []
+    for i in xnew:
+        loc = i.find("ln")
+        xfinal.append(i[loc:])
+
+    #Return concatenated terms, no special rule for log multiplication
+    m = ""
+    for i in xfinal:
+        m += "(" + i + ")"
+
+    return m
+
+def multiply(x):
+    """
+    Uses all other multiplication functions to create one simple function 
+    that can handle any terms, with input
+
+    - x: Multiple str expressions (as complex as necessary) (arr)
+
+    Concatenates all other multiplication methods. If they are applied to no relevant
+    terms, e.g. funcmult(["e^(5x)","x^2","yln(2x")]) -> "", they always return empty strings
+    meaning the concatenation doesn't fail;
+    Returns the (mostly) simplified expression resulting from multiplying all terms together (str)
+    """
+    multiterms = []
+    for i in x:
+        if ("+" in i) or (" - " in i): #Case of expressions with more than one term, e.g. "sinx + cosx"
+            multiterms.append(i)
+            x.remove(i)
+
+    if "0" in x:
+        return "0" #If 0 multiplies anything, it's always 0!
+
+    if len(x) == 1 and len(multiterms) == 0:
+        return x[0] #Return only term if only one term
+
+    #Use methods to multiply
+    c = comult(x)
+    v = varimult(x)
+    f = funcmult(x)
+    e = emult(x)
+    l = logmult(x)
+
+    #Concatenate for expression
+    exp = "{0}{1}{2}{3}{4}".format(c,v,f,e,l)
+
+    if exp == "":
+        return "1" #Return 1 if expression completely cancels out
+
+    else:
+        if len(multiterms) != 0:
+            m = ""
+            for i in multiterms:
+                m += "({0})".format(i) #Concatenate multiterm expressions on the end
+            exp += m
+        return exp
+##############################################
+
+### DIVISIVE #################################
+#The Divisive functions work the same as Multiplicative, separating the jobs by coefficient/variable/function/log/e.
+#The same expression list can again be used in any of them to return the divided variables.
+#However, it should be noted that all functions now take to inputs, the numerator (x) and the denominator (y).
+#Again, "divide" is simply a concatenation function for the most part.
+##############################################
+def varidiv(x,y):
+    """
+    Divides ONLY the lone variable terms (e.g. x^3,y,g^7) 
+    from two lists of expressions to divide, with inputs
+
+    - x: Numerator expression, e.g. "sinxcosx" (str)
+    - y: Denominator expression (or divisor), e.g. "e^(x)" (str)
+
+    Returns x/y variable terms, simplified for the most part (str);
+    Again, works with any complicated expressions, e.g. varidiv("xsin^2x","e^(x)") -> "x";
+    Beware a lot of time is saved with divide by using the multiply functions
+    """
+    #Retrieve variables only from x,y
+    xt = terms(x)
+    x = [i for i in xt if (func(i) == "") and ("e^" not in i) and (co(i) == "1")]
+    #Remove coefficients from other terms
+    x.extend([i[len(co(i)):] for i in xt if (func(i) == "") and ("e^" not in i) and (co(i) != "1")])
+
+    #Trim for separated terms with no function and no e^ term
+    yt = terms(y)
+    y = [i for i in yt if (func(i) == "") and ("e^" not in i) and (co(i) == "1")]
+    #Trim any other terms and append where coefficient is not 1, i.e. not ""
+    y.extend([i[len(co(i)):] for i in yt if (func(i) == "") and ("e^" not in i) and (co(i) != "1")])
+
+    #Change y powers to negative
+    ydiv = []
+    for i in y:
+        ydiv.append("{0}^{1}".format(vari(i),"-"+pwr(i)))
+
+    #Add divisor terms to x array and multiply (thus dividing)
+    x.extend(ydiv)
+    d = multiply(x)
+    if d == "1":
+        d = ""
+    return d
+
+def codiv(x,y):
+    """
+    Divides ONLY the coefficients (e.g. "7","4") 
+    from two lists of expressions to divide, with inputs
+
+    - x: Numerator expression, e.g. "4sinxcosx" (str)
+    - y: Denominator expression (or divisor), e.g. "2e^(x)" (str)
+
+    Returns x/y coefficient, simplified for the most part (str);
+    Again, works with any complicated expressions, e.g. codiv("2sin^2x","4e^(x)") -> "0.5";
+    Beware a lot of time is saved with divide by using the multiply functions
+    """
+    #Check for negatives
+    neg = False
+    if x[0] == "-": #Only numerator negative
+        neg = True
+        x = x[1:]
+
+    if y[0] == "-" and neg == True: #Num & denom negative, thus double negative cancels
+        neg = False
         y = y[1:]
-        print(y)
-    index = 0
-    while index < len(y):
-        character = y[index]
-        if character.isdigit() == False:
-            y = y[:index]
+
+    elif y[0] == "-" and neg == False: #Only denominator negative
+        neg = True
+        y = y[1:]
+
+    #Take coefficients of x,y until both numbers
+    cox = co(x)
+    coy = co(y)
+    while cox.isnumeric() == False or coy.isnumeric() == False:
+        cox = co(cox) #Not numeric, take coefficient again and repeat
+        coy = co(coy)
+
+    #Divide coefficients as floats
+    nco = str(float(cox)/float(coy))
+    if nco == "1.0":
+        nco = ""
+
+    #Return integer if ".0" only on end of float
+    if nco[nco.find(".")+1:] == "0":
+        nco = nco[:nco.find(".")]
+
+    #Round to three decimal places if float is longer
+    elif len(nco[nco.find(".")+1:])>3:
+        nco = "{0:0.3f}".format(float(nco))
+
+    #Add on negative if correct
+    if neg == True:
+        nco = "-" + nco
+
+    return nco
+
+def funcdiv(x,y):
+    """
+    Divides ONLY the functions (e.g. "sinxcosx","tanx") 
+    from two lists of expressions to divide, with inputs
+
+    - x: Numerator expression, e.g. "4sinxcosx" (str)
+    - y: Denominator expression (or divisor), e.g. "2tanx" (str)
+
+    Returns x/y function terms, simplified for the most part (str);
+    Again, works with any complicated expressions, e.g. codiv("2sin^2x","4cosx") -> "sin(x)tan(x)";
+    This function works simply by concatenating reciprocated y functions to x functions and simplifying using dict
+    """
+    #Retrieve function terms only from x,y
+    xt = separate(terms(x))
+    x = [i for i in xt if (func(i) != "") and ("e^" not in i) and (co(i) == "1")]
+    #Remove coefficients from other terms
+    x.extend([i[len(co(i)):] for i in xt if (func(i) != "") and ("e^" not in i) and (co(i) != "1")])
+
+    #Trim for separated terms with function and no e^ term
+    yt = separate(terms(y))
+    y = [i for i in yt if (func(i) != "") and ("e^" not in i) and (co(i) == "1")]
+    #Trim any other terms and append where coefficient is not 1, i.e. not ""
+    y.extend([i[len(co(i)):] for i in yt if (func(i) != "") and ("e^" not in i) and (co(i) != "1")])
+
+    #Reciprocate functions for y using trigrecip dict
+    ydiv = []
+    for i in y:
+        cont = i[len(func(i)):]
+        ydiv.append("{0}{1}".format(trigrecip[func(i)],cont))
+    
+    #Add divisor terms to x array and multiply (thus dividing)
+    x.extend(ydiv)
+    d = multiply(x)
+    if d == "1":
+        d = ""
+    return d
+
+def ediv(x,y):
+    """
+    Divides ONLY the e^ terms (e.g. "e^(x)","4e^(2x)") 
+    from two lists of expressions to divide, with inputs
+
+    - x: Numerator expression, e.g. "4e^(2x)cosx" (str)
+    - y: Denominator expression (or divisor), e.g. "e^(ln(x))" (str)
+
+    Returns x/y e^ terms, simplified for the most part (str);
+    Again, works with any complicated expressions, e.g. codiv("2sinxe^(2x)","e^(2y)") -> "e^(2x-2y)";
+    This function hasn't really been ironed out much and the output isn't always simplified, but it isn't used often;
+    Note this is also capable of taking care of e^ln terms, which is why it is so long
+    """
+    #Remove any negatives
+    if x[0] == "-":
+        x = x[1:]
+    if y[0] == "-":
+        y = y[1:]
+
+    #Remove coefficients
+    c = x
+    while c.isnumeric() == False:
+        try:
+            c = str(float(c)) #Break the loop if float, isnumeric doesn't accept floats
             break
-        index += 1
-    if negative != -1:
-        y = "-" + y
-    return y
+        except:
+            pass
+        c = co(c)
+    if c != "1":
+        x = x[x.index(c)+len(c):]
 
-coeffcheck("(25tanxsinx)")
-
-def powercheck(y):
-    ### Function to return the first power from an expression ###
-    # Removing ^-1 arc trig notation to stop confusion with exponent "^"
-    y = str(y)
-    func = functioncheck(y)
-    if func == "arctan":
-        y = y.replace("tan^-1","")
-    if func == "arcsin":
-        y = y.replace("sin^-1","")
-    if func == "arccos":
-        y = y.replace("cos^-1","")
-    var = varcheck(y)
-    varpos = y.find(var)
-    y = y[varpos:]
-    exponent = y.find("^")
-    if exponent != -1:
-        powerpos = int(exponent + 1)
-        bracketcheck = y.find("(")
-        if bracketcheck == -1:
-            return y[powerpos:]
-        else:
-            opened = int(exponent + 2)
-            closed = len(y) - 1
-            return y[opened:closed]
-
-powercheck("")
-
-def variable_cancel(numerator, denominator):
-    ### Function to cancel variables with powers to simplify fractions ###
-    ### i.e. "5x^3/2x^4" -> "5/2x" ###
-    num = varcheck(numerator)
-    denom = varcheck(denominator)
-    n_co = coeffcheck(numerator)
-    d_co = coeffcheck(denominator)
-    if num == denom and num != "" and num != None and denom != "" and denom != None:
-        n_power = powercheck(numerator)
-        d_power = powercheck(denominator)
-        #convert to integers for working new powers
-        #need if statement for checking dtype as int(NoneType) does not compute
-        if n_power == None or n_power == "":
-            n_power = 0
-        else:
-            n_power = int(n_power)
-        if d_power == None or d_power == "":
-            d_power = 0
-        else:
-            d_power = int(d_power)
-        if n_power > d_power:
-            denominator = d_co
-            if d_power == 0:
-                new_power = n_power
-                new_power -= 1
-            else:
-                new_power = n_power - d_power
-            if new_power <= 1:
-                #cut off coefficient and reattach later to stop it from being replaced if power is the same
-                numerator = numerator.replace("^","")
-                coeffpos = numerator.find(n_co)
-                numerator = numerator[(coeffpos+len(n_co)):]
-                numerator = numerator.replace(str(n_power),"")
-                numerator = n_co + numerator
-            else:
-                coeffpos = numerator.find(n_co)
-                numerator = numerator[(coeffpos+len(n_co)):]
-                numerator = numerator.replace(str(n_power),str(new_power))
-                numerator = n_co + numerator
-        elif d_power > n_power:
-            numerator = n_co
-            if n_power == 0:
-                new_power = d_power
-                new_power -= 1
-            else:
-                new_power = d_power - n_power
-            if new_power <= 1:
-                #cut off coefficient and reattach later to stop it from being replaced if power is the same
-                denominator = denominator.replace("^","")
-                coeffpos = denominator.find(d_co)
-                denominator = denominator[(coeffpos+len(d_co)):]
-                denominator = denominator.replace(str(d_power),"")
-                denominator = d_co + denominator
-            else:
-                coeffpos = denominator.find(d_co)
-                denominator = denominator[(coeffpos+len(d_co)):]
-                denominator = denominator.replace(str(d_power),str(new_power))
-                denominator = d_co + denominator
-        elif n_power == d_power:
-            numerator = n_co
-            denominator = d_co
-    if numerator == "":
-        numerator = "1"
-    if denominator == "":
-        cancelled = "{0}".format(numerator)
-    else:
-        cancelled = "{0}/{1}".format(numerator,denominator)
-    return cancelled
-
-variable_cancel("-9x^5","-x")
-
-def simplify(numerator, denominator):
-    ### Function that simplifies fractions using highest common factor ###
-    # Simplify has a built in timer that cancels the for loop after 10 seconds of iteration
-    # If it breaks after 10s it returns the last hcf found and simplifies the fraction
-    # This is to stop very long unnecessary iteration for higher order Maclaurin approximations
-    top = coeffcheck(numerator)
-    bottom= coeffcheck(denominator)
-    num_var = varcheck(numerator)
-    denom_var = varcheck(denominator)
-    top_pwr = powercheck(numerator)
-    bot_pwr = powercheck(denominator)
-    top_func = functioncheck(numerator)
-    bot_func = functioncheck(denominator)
-    #return x if top function and bottom function not the same i.e. sinx/lnx
-    #also return x if top var and bottom var not the same but functions are the same i.e. sinx/sint
-    if (top_func != bot_func or ((top_func == bot_func) and top_func != "" and (num_var != denom_var))) and top_func != "" and bot_func != "":
-        x = str(numerator) + "/" + str(denominator)
-        return x
-    if top == "" or bottom == "":
-        x = variable_cancel(numerator, denominator)
-        return x
-    else:
-        num_coefficient = int(top)
-        denom_coefficient = int(bottom)
-    newhcf = 1  #set default divisor to 1 in case it escapes the loop for whatever reason
-    start_time = time.time()   #timer to break for loop if it goes on too long, giving current hcf
-    for i in range(1, abs(num_coefficient*denom_coefficient)):  #abs() for inclusion of negative coefficients
-        if num_coefficient % i == 0 and denom_coefficient % i == 0:
-            newhcf = i
-        new_time = time.time()
-        if new_time - start_time > 10:
+    c = y
+    while c.isnumeric() == False:
+        try:
+            c = str(float(c))
             break
-    new_num_co = int(num_coefficient/newhcf)
-    if new_num_co == 1 and num_var != "":
-        new_num_co = ""
-    elif new_num_co == -1 and num_var != "":
-        new_num_co = "-"
-    new_denom_co = int(denom_coefficient/newhcf)
-    if new_denom_co == 1 and (denom_var != "" or denom_var != None):
-        new_denom_co = ""
-    elif new_denom_co == -1 and (denom_var != "" or denom_var != None):
-        new_denom_co = "-"
-    numerator = str(numerator)
-    if top_pwr != "" and top_pwr != None:
-        if num_var == "e":
+        except:
+            pass
+        c = co(c)
+    if c != "1":
+        y = y[y.index(c)+len(c):]
+
+    #Retrieve e terms only from x,y
+    xt = terms(x)
+    x = [i for i in xt if ("e^" in i) and ("ln" not in i)]
+
+    yt = terms(y)
+    y = [i for i in yt if ("e^" in i) and ("ln" not in i)]
+
+    #Bracket x powers
+    xdiv = []
+    for i in x:
+        xdiv.append("e^{0}".format("("+pwr(i)+")"))
+
+    #Append e^ln terms if present
+    logs = [i for i in xt if ("e^" in i) and ("ln" in i)]
+    logsdiv = [i for i in yt if ("e^" in i and "ln" in i)]
+
+    #Massive cheat, but multiplying e^ln cases by 1 sorts out the e^ln
+    logsdnew = []
+    for i in logsdiv:
+        term = i[:i.index("^")] + "^(" + i[i.index("^")+1:] + ")" #Add brackets to power
+        term = multiply(["1",term])
+        logsdnew.append(term)
+
+    #Then, funcdiv with numerator as 1 flips the fraction. I'm embarrassed but it's such an easy way
+    logsdfinal = []
+    for i in logsdnew:
+        term = codiv("1",i) + varidiv("1",i) + funcdiv("1",i)
+        logsdfinal.append(term)
+
+    #Change y powers to negative
+    ydiv = []
+    for i in y:
+        ydiv.append("e^{0}".format("(-"+pwr(i)+")"))
+
+    #Add divisor terms to x array and multiply (thus dividing)
+    xdiv.extend(ydiv)
+    xdiv.extend(logs)        #Numerator e^ln terms
+    xdiv.extend(logsdfinal)  #Denominator e^ln terms
+    d = multiply(xdiv)
+    if d == "1":
+        d = ""
+    return d
+
+def divide(x,y):
+    """
+    Uses all other division functions to create one simple function 
+    that can handle any terms, with inputs
+
+    - x: Numerator expression, e.g. "4e^(2x)cosx" (str)
+    - y: Denominator expression (or divisor), e.g. "e^(ln(x))" (str)
+
+    Concatenates all other division methods. If they are applied to no relevant
+    terms, e.g. funcdiv("e^(5x)","x^2") -> "", they always return empty strings meaning the concatenation doesn't fail;
+    Returns the (mostly) simplified expression resulting from dividing x/y (str)
+    """
+    #Return fraction if multiple terms on top/bottom
+    if (" + " in x == True) or (" - " in x == True) or (" + " in y == True) or (" - " in y == True):
+        return "({0})/({1})".format(x,y)
+
+    #All methods of division
+    c = codiv(x,y)
+    v = varidiv(x,y)
+    f = funcdiv(x,y)
+    e = ediv(x,y)
+
+    #Return concatenation
+    return "{0}{1}{2}{3}".format(c,v,f,e)
+##############################################
+
+### DIFFERENTIATION ##########################
+#The Differentiation functions again work similarly as they separate the jobs by coefficient/variable/function/log/e.
+#The issue is that it is not as simple as concatenation after the fact, meaning they basically comprise of simple methods
+#followed by loads of checks to see which method should be used at each point.
+#"diff" is all-encompassing; the idea of this script is that the user can easily use "divide", "multiply" and "diff" and
+#not worry about the computation underneath.
+##############################################
+def varidiff(x):
+    """
+    Diffentiates any given lone variable term, e.g. x^2,y^7,etc.
+    The function does not work in the same way as multiplication and division and
+    will only return a result if the correct expression is entered, for example
+    varidiff("sinx") -> ""; input
+
+    - x: Lone variable expression, e.g. "x" (str)
+
+    Returns a differentiated expression by the rule f'(v) = (pwr)(variable)^(pwr-1) (str)
+    Returns "" for any incorrect expressions input
+    """
+    #Return empty string if e^, ln present or it is a number
+    if "e^" in x or "ln" in x:
+        return ""
+    try:
+        int(x)
+        return ""
+    except ValueError:
+        pass
+
+    #Take terms with no function
+    t = terms(x)
+    t = [i for i in t if func(i) == ""]
+
+    dt = []
+    for i in t:
+        #Take power, coefficient, variable of each term
+        p = pwr(i)
+        c = co(i)
+        if c == "-":
+            c = "-1"
+        v = vari(i)
+
+        #If power is 1, differentiation returns just coefficient
+        if p == "1":
+            return c
+
+        #Apply diff rules
+        newco = int(c)*int(p) #Bring power down and multiply by coeff
+        npwr = int(p) - 1 #Calc new power
+
+        #Correct syntax
+        if newco == -1:
+            newco = "-"
+        elif newco == 1:
+            newco = ""
+
+        if npwr == 1:
+            d = "{0}{1}".format(newco,v) #Case of new power = 1
+        else:
+            d = "{0}{1}^{2}".format(newco,v,npwr) #Other cases
+
+        dt.append(d) #Append to list of differentiated variables
+
+    return ("{0}{1}".format(comult(dt),varimult(dt)))
+
+def funcdiff(x):
+    """
+    Diffentiates any given function term, e.g. sinx,cos^2x,etc.
+    The function will only return a result if the correct expression is entered, for example
+    funcdiff("e^(x)") -> ""; input
+
+    - x: Function expression, e.g. "secx" (str)
+
+    Returns a differentiated expression by the rule e.g. dcos(f(x))/dx = -f'(x)sin(f(x))
+    Returns "" for any incorrect expressions input
+    """
+    #Return empty string if e^, ln present
+    if "e^" in x or "ln" in x:
+        return ""
+
+    #Take coefficient and find function
+    c = co(x)
+    if c == "-":
+        c = "-1"
+    f = func(x)
+    if f == "":
+        return "" #No function, return empty string
+    
+    cont = x[x.index(f)+len(f):] #"cont" is subject of function, e.g. x^2 for sin(x^2)
+    nco = multiply([c,varidiff(cont)]) #New coefficient
+    if nco == "-":
+        nco = "-1"
+
+    #Case where the differentiated function returns multiple functions, e.g. dsecx -> secxtanx
+    if type(trigdiff[f]) == tuple:
+        newf = trigdiff[f][0]+cont+trigdiff[f][1]+cont
+    else:
+        newf = trigdiff[f]+cont #Case where trigdiff dict returns single function
+
+    #Multiply differentiated expression by new coefficient
+    dx = multiply([nco,newf])
+    return dx
+
+def vfprod(x):
+    """
+    Essentially a product differentiation mechanism capable of differentiating
+    functions and variables ONLY, e.g. vfprod(["x",sinx"]) -> "sin(x) + xcos(x)";
+    Note from the above the separate terms must be input as a list, input
+
+    - x: Terms of function expression, e.g. ["x","cosx"] (arr)
+
+    Returns a differentiated expression by the rule dx = f'(x)g(x) + f(x)g'(x)
+    """
+    #Create variable for differentiated material
+    dx = ""
+    i = 0
+    while i < len(x):
+
+        #Differentiate the first item, concatenate the rest
+        di = []
+        di.append(funcdiff(x[0]) + varidiff(x[0]))
+        for j in x[1:]:
+            di.append(j)
+        di = multiply(di)
+
+        dx += di
+        dx += " + " #Add terms to final diff string
+
+        x = rotate(x)  #Rotate the list for the next term
+        i += 1  #Counter allows loop to continue over all terms in list
+
+    dx = dx[:-3] #Remove final " + "
+    dx = dx.replace("+ -","- ")
+    return dx
+
+def ediff(x):
+    """
+    Diffentiates any given e^ term, e.g. e^(2x),4e^(-7y),etc.
+    The function does not work in the same way as multiplication and division and
+    will only return a result if the correct expression is entered, for example
+    ediff("sinx") -> ""; input
+
+    - x: e^ expression, e.g. "e^(x)" (str)
+
+    Returns a differentiated expression by the rule de^f(x) = f'(x)e^f(x)
+    Note that this function can handle e^ln terms
+    """
+    #Return empty string if e not present
+    if "e^" not in x:
+        return ""
+
+    #Take coefficient
+    c = co(x)
+    if c == "-":
+        c = "-1"
+    elif c == "e^":
+        c = "1"
+    else:
+        while c.isnumeric() == False:
+            c = co(c)
+
+    #Take power
+    p = x[x.index("e^")+2:]
+    p = brackets(p)
+    if vari(p) == None:
+        return ""
+
+    #Check for case of power being ln
+    if "ln" in p:
+        loc = p.index("ln")
+        cont = p[loc+2:] #Grab content of ln
+        if loc != 0:
+            pco = brackets(p[:loc]) #Grab coefficient if not 1
+
+        #Case of function
+        if func(p[loc+2:]) != "":
+            function = True
+            floc = p.index(func(p[loc+2:])) #If ln(func) grab loc of func
+            try:
+                if function == True:
+                    x = p[loc+2:floc+3] + "^" + pco + p[floc+3:] #Power to function, not variable, i.e. sin^2x instead of sinx^2
+            except:
+                x = p[loc+2:]
+
+        #Case of variable
+        else:
+            cp = pwr(cont)
+            cc = co(cont)
+            try:
+                newp = str(int(cp)*int(pco))
+                if newp != "1":
+                    if cc == "1":
+                        x = vari(cont) + "^" + newp #Expression now variable with correct power, no num coefficient
+                    else:
+                        x = cc + vari(cont) + "^" + newp #Variable with corrent power and coefficient
+                else:
+                    if cc == "1":
+                        x = vari(cont) #If power & coefficient are 1
+                    else:
+                        x = cc + vari(cont)
+            except:
+                x = cont
+
+    #Case where e^ln, differentiate new x
+    if "e^" not in x:
+        f = func(x)
+        if f != "":
+            x = separate(terms(x))
+            if len(x) == 1:
+                x = x[0]
+            if type(x) == list:  #Product diff for each element in list of terms
+                dx = vfprod(x)
+            else:
+                dx = funcdiff(x)
+            if c != "1" and c != "":
+                dx = multiply([c,dx])
+        else:
+            dx = multiply([c,varidiff(x)])
+        return dx
+
+    #If e^ still present, diff according to f'(x)e^f(x)
+    else:
+        if func(p) != "":
+            sep = separate(terms(p))
+            if len(sep) == 1:
+                p = sep[0]
+            if type(sep) == list:
+                dp = vfprod(sep)
+            else:
+                dp = funcdiff(p)
+        else:
+            dp = varidiff(p)
+
+    #Multiply by coefficient
+    if "+" not in dp and " - " not in dp:
+        dp = multiply([dp,c]) #multiply function can't handle multiple separate terms
+    else:
+        if c == "1":
             pass
         else:
-            exponent = numerator.find("^")
-            numerator = numerator[:exponent]
-            numerator = numerator.replace(top,str(new_num_co))
-            numerator = numerator + "^" + top_pwr
+            dp = c + ")(" + dp #No need to bracket as this is achieved in last line
+
+    if dp == "-1" or dp == "-":
+        dp = "-"
+    elif dp == "1":
+        dp = ""
     else:
-        numerator = numerator.replace(top,str(new_num_co))
-    denominator = str(denominator)
-    if bot_pwr != "" and bot_pwr != None:
-        if denom_var == "e":
-            pass
-        else:
-            exponent = denominator.find("^")
-            denominator = denominator[:exponent]
-            denominator = denominator.replace(bottom,str(new_denom_co))
-            denominator = denominator + "^" + bot_pwr
+        dp = "(" + dp + ")"
+    
+    return "{0}e^({1})".format(dp,p)
+
+def logdiff(x):
+    """
+    Diffentiates any given log term, e.g. ln(secx),2ln(x^2),etc.
+    The function does not work in the same way as multiplication and division and
+    will only return a result if the correct expression is entered, for example
+    logdiff("x^2") -> ""; input
+
+    - x: Log expression, e.g. "ln(x)" (str)
+
+    Returns a differentiated expression by the rule dln(f(x)) = f'(x)/f(x)
+    """
+    #Check for negative
+    negative = False
+    if x.find("-") == 0:
+        negative = True
+
+    #Take coefficient
+    c = co(x)
+    if c == "-":
+        c = "-1"
     else:
-        denominator = denominator.replace(bottom, str(new_denom_co))
-    #final check of coefficients to prevent negative over negative, i.e. fix -1/-x -> 1/x
-    top_negative = numerator.find("-")
-    bottom_negative = denominator.find("-")
-    if top_negative == bottom_negative == 0:
-        numerator = numerator[1:]
-        denominator = denominator[1:]
-    elif bottom_negative == 0 and top_negative != 0:
-        numerator = "-" + numerator
-        denominator = denominator[1:]
-    x = variable_cancel(numerator, denominator)
-    return x
+        while c.isnumeric() == False:
+            c = co(c)
 
-simplify("32sin2x","24")
+    #Return nothing if e present, or if ln not present
+    if ("e^" in x) or ("ln" not in func(x)):
+        return ""
 
-def coeff_multiply(x, multiplier):
-    ### Function that multiplies the coefficient of an argument, x, by a multiplier, returning the full expression as a string ###
-    # e.g. coeff_multiply("7e^2x", "2") -> "14e^2x"
-    x_coeff = coeffcheck(x)  #takes coefficient of expression
-    power = powercheck(x)
-    if x_coeff == "-1" and multiplier == "-1":
-        negative = x.find("-")
-        x = x[(negative+1):]
-        return x
-    elif (x_coeff == "" or x_coeff == None) and multiplier == "-1":
-        x = "-" + x
-        return x
-    if multiplier != None and x_coeff != "":
-        x_coeff = coeffcheck(x_coeff)  #first coefficient may include a variable so takes coefficient again
-        new_coeff = str(int(x_coeff) * int(multiplier))
-        new_coeff = str(new_coeff)
-        x = x.replace(x_coeff, new_coeff)
-        new_power = powercheck(x)
-        if new_power != power:
-            x = x.replace(new_power, power) #if coeff_multiply replaces original power, change it back
-    elif multiplier != None and x_coeff == "":
-        new_coeff = str(multiplier)
-        opened = x.find("(")
-        if opened == 0:
-            add_x = x[1:] 
-            x = new_coeff + add_x
-        else:
-            x = new_coeff + x
-    double_negative = x.find("--")
-    if double_negative != -1:
-        x = x.replace("--","")
-    return x
+    #Get content of ln
+    try:
+        cont = x[x.index("(")+1:x.rfind(")")]
+    except:
+        raise SyntaxError("Please use brackets around the content of ln")
 
-coeff_multiply("","")
+    #Take terms, product diff content
+    t = separate(terms(cont))
+    dt = vfprod(t)
+    if negative == True:
+        dt = "-" + dt
 
-def square(x):
-    ### Function that squares an expression with a coefficient and power ###
-    # Used for, e.g. square("2x^3") -> "4x^6", square("10") -> "100"
-    function = functioncheck(x)
-    if function != "":
-        funcpos = x.find(function)
-        replace_index = funcpos + len(function)
-        start = x[:replace_index]
-        end = x[replace_index:]
-        x = start + "^2" + end
-    else:
-        var = varcheck(x)
-        x_coeff = coeffcheck(x)
-        if x_coeff != "":
-            x_coeff = int(x_coeff)
-            x_coeff = x_coeff ** 2
-        x_power = powercheck(x)
-        if x_power != "" and x_power != None:
-            x_power = int(x_power)
-            x_power *= 2
-            x = "{0}{1}^{2}".format(x_coeff,var,x_power)
-        elif (var != "" and var != None) and (x_power == "" or x_power == None):
-            x_power = "2"
-            x = "{0}{1}^{2}".format(x_coeff,var,x_power)
-        else:
-            x = "{0}{1}".format(x_coeff,var)
-    return x
+    #dln(f(x)) = f'(x)/f(x)
+    dx = divide(dt,cont)
+    dx = multiply([c,dx])
 
-square("")
-
-def multiply(x, y):
-    ### Function that multiplies two expressions together into a single term ###
-    ### NOTE: Input expressions must share the same variable, e.g. e^x cannot multiply with x ###
-    # Do not use this to multiply and expression by a number. For that, use coeff_multiply(x, multiplier)
-    # Used for, e.g. multiply("2x", "5x^2") -> "10x^3"
-    x_co = coeffcheck(x)
-    y_co = coeffcheck(y)
-    if y_co != "" and x_co != "" and y_co.isdigit() == True and x_co.isdigit() == True:
-        new_co = coeff_multiply(x_co, y_co)
-    elif y_co != "" and x_co != "" and (y_co.isdigit() == True or x_co.isdigit() == True):
-        x_var = varcheck(x_co)
-        y_var = varcheck(y_co)
-        if x_var != "" and x_var != None:
-            new_co = coeff_multiply(x_co, y_co)
-        elif y_var != "" and y_var != None:
-            new_co = coeff_multiply(y_co, x_co)
-    elif y_co != "" and x_co != "" and y_co.isdigit() == False and x_co.isdigit() == False:
-        new_co = multiply(x_co, y_co)
-    elif y_co != "" and x_co == "":
-        new_co = coeff_multiply(x_co, y_co)
-    elif x_co != "" and y_co == "":
-        new_co = coeff_multiply(y_co, x_co)
-    else:
-        new_co = ""
-    x_power = powercheck(x)
-    y_power = powercheck(y)
-    var = varcheck(x)
-    if var == "e":
-        x_p_var = varcheck(x_power)
-        y_p_var = varcheck(y_power)
-        if x_p_var == y_p_var:
-            y_p_co = coeffcheck(y_power)
-            x_p_co = coeffcheck(x_power)
-            if y_p_co != "" and x_p_co != "":
-                new_power = str(int(x_p_co) + int(y_p_co)) + x_p_var
-            elif y_p_co != "" and x_p_co == "":
-                new_power = str(int(y_p_co) + 1) + x_p_var
-            elif x_p_co != "" and y_p_co == "":
-                new_power = str(int(x_p_co) + 1) + x_p_var
-            else:
-                new_power = "2" + x_p_var
-    else:
-        if x_power != None and x_power != "" and y_power != None and y_power != "":
-            new_power = str(int(x_power) + int(y_power))
-        elif x_power != None and x_power != "" and (y_power == None or y_power == ""):
-            new_power = str(int(x_power) + 1)
-        elif y_power != None and y_power != "" and (x_power == None or x_power == ""):
-            new_power = str(int(y_power) + 1)
-        else:
-            new_power = "2"
-    output = new_co + var + "^" + new_power
-    return output
-
-multiply("6e^x","5x^3")
-
-def inverse_power(x):
-    ### Function to fix powers on the bottom of fractions after differentiating ###
-    # It essentially raises the power of the denominator by 1
-    # e.g. inverse_power("-4/x^2") -> "-4/x^3"
-    quotient = x.find("/")
-    if quotient != -1:
-        top = x[:quotient]
-        top_var = varcheck(top)
-        bottom = x[(quotient+1):]
-        bottom_var = varcheck(bottom)
-    else:
-        bottom_var = ""
-    if bottom_var != "" and bottom_var != "e":
-    #if x is on bottom, slice off power, reduce it, re-attach it
-        if top_var != "" and top_var != None:
-            x = simplify(top, bottom)
-        exponent = bottom.find("^")
-        if exponent != -1:
-            exponent += (len(top) + 1)
-            power = int(powercheck(bottom))
-            new_power = power + 1
-            before = x[:(exponent + 1)]
-            x = before + str(new_power)
-    return x
-
-inverse_power("-5/x^5")
-
-def basicdiff(x):
-    ### Function that returns the derivative of a basic expression only containing one variable ###
-    ### e.g. 12x^6 -> 72x^5, cannot do e, trig, etc ###
-    var = varcheck(x)
-    power = powercheck(x)
-    coefficient = coeffcheck(x)
-    if len(x) == 1 and var != "" and var != None:
-        x = "1"
-    elif (coefficient != 0 and coefficient != None and coefficient != "") and (power != 0 and power != None and power != ""):
-        if power == "2":
-            coefficient = int(coefficient) * int(power)
-            x = "{0}{1}".format(coefficient,var)
-        else:
-            coefficient = int(coefficient) * int(power)
-            power = int(power) - 1
-            x = "{0}{1}^{2}".format(coefficient,var,power)
-    elif power == "" or power == None and var!= "" and var != None:
-        var = ""
-        x = coefficient
-    elif (coefficient == 0 or coefficient == None or coefficient == "") and (power != 0 and power != None and power != ""):
-        coefficient = power
-        if power == "2":
-            x = "{0}{1}".format(coefficient,var)
-        else:
-            power = int(power) - 1
-            x = "{0}{1}^{2}".format(coefficient,var,power)
-    else:
-        return None
-    return x
-
-basicdiff("53x^45")
-
-def ediff(coeff, pwr):
-    ### Function that returns the derivative an expression containing only e and one variable ###
-    ### e.g. 5e^7x -> 35e^7x, 10e^(2x^6) -> (120x^5)e^(2x^6), cannot do product, quotient, etc ###
-    ### Takes arguments for the coefficient and power of e ###
-    new_coefficient = "("+diff(pwr)+")"
-    if new_coefficient == "(1)":
-        new_coefficient = ""
-    elif new_coefficient == "(-1)":
-        if coeff == "-" or coeff == "-1":
-            new_coefficient = ""
-            x = "{0}e^({1})".format(new_coefficient,pwr)
-            return x
-        else:
-            multiplier = "-1"
-            new_coefficient = coeff_multiply(coeff, multiplier)
-            x = "{0}e^({1})".format(new_coefficient,pwr)
-            return x
-    x = "{0}e^({1})".format(new_coefficient,pwr)
-    if coeff != "" and coeff != None:
-        if coeff == "-":
-            multiplier = "-1"
-        else:
-            multiplier = coeff
-        x = coeff_multiply(x,multiplier)
-    return x
-
-ediff("", "")
-
-def functiondiff(x, function):
-    ### Function that calculates the derivative of multiple mathematical functions ###
-    ### e.g. sin, cos, tan, ln ###
-    # NOTE: This function contains the diff function, which is written after it.
-    # The diff function also contains this functiondiff function.
-    # Thus, to use both properly, run functiondiff -> run diff -> run functiondiff again. 
-    multiplier = None
-    coefficient = coefficient(x)
-    if coefficient != "":
-        multiplier = coefficient
-        funcpos = x.find(function)
-        # If searching for ^-1 notation, slice "arc" and add "^-1", then repair after index is found
-        if funcpos == -1:
-            function = function[3:] + "^-1"
-            funcpos = x.find(function)
-            function = "arc" + function[:3]
-        x = x[funcpos:]
-    arc_check = x.find("^-1")
-    if arc_check != -1:
-        if function == "arcsin":
-            x_new = x.replace("sin^-1","")
-        elif function == "arccos":
-            x_new = x.replace("cos^-1","")
-        elif function == "arctan":
-            x_new = x.replace("tan^-1","")
-    else:
-        x_new = x.replace(function,"")
-    x_new = x_new.replace("(","")
-    x_new = x_new.replace(")", "")
-    if function == "ln":
-        top = diff(x_new)
-        top = coeff_multiply(top, multiplier)
-        bottom = x_new
-        x = simplify(top,bottom)   
-    elif function == "arcsin":
-        top = diff(x_new)
-        top = coeff_multiply(top, multiplier)
-        squared = square(x_new)
-        bottom = "√(1 - {0})".format(squared)
-        x = "({0})/({1})".format(top,bottom)
-    elif function == "arccos":
-        top = diff(x_new)
-        top = coeff_multiply(top, multiplier)
-        squared = square(x_new)
-        bottom = "√(1 - {0})".format(squared)
-        x = "-({0})/({1})".format(top,bottom)
-    elif function == "arctan":
-        top = diff(x_new)
-        top = coeff_multiply(top, multiplier)
-        squared = square(x_new)
-        bottom = "{0} + 1".format(squared)
-        x = "({0})/({1})".format(top,bottom)
-    else:
-        new_co = diff(x_new)
-        new_co = coeff_multiply(new_co, multiplier)
-        #check if the new_co is "-1", if it is, replace it with just "-"
-        final_co = coeffcheck(new_co)
-        if final_co == "-1":
-            new_co = "-"
-        if new_co != "1":
-            x = new_co + x
-        if function == "sin":
-            x = x.replace("sin","cos")
-        elif function == "cos":
-            x = x.replace("cos","sin")
-            x = "-" + x
-        elif function == "tan":
-            x = x.replace("tan","sec^2")
-        elif function == "cot":
-            x = x.replace("cot","csc^2")
-            x = "-" + x
-        elif function == "sec":
-            x = x + "tan(" + x_new + ")"
-        elif function == "csc":
-            x = x + "cot(" + x_new + ")"
-            x = "-" + x
-        double_negative = x.find("--")  #Search for double negative to change e.g. --sin -> sin
-        if double_negative != -1:
-            x = x.replace("--","")
-    return x
-
-functiondiff("","")
-
-def quotientdiff(top, bottom):
-    ### Function that calculates the derivative of a quotient (fraction) ###
-    ### CURRENTLY NEEDS AN OVERHAUL ###
-    u = top
-    v = bottom
-    du = diff(u)
-    dv = diff(v)
-    v_squared = square(v)
-    #gather variable from all terms to see if two terms can multiply to make a single term
-    #i.e. to check if u*dv can form one term instead of two bracketed terms
-    u_var = varcheck(u)
-    v_var = varcheck(v)
-    du_var = varcheck(du)
-    dv_var = varcheck(dv)
-    if v_var == du_var and v_var != "" and v_var != None:
-        vdu = multiply(v,du)
-    elif du == None:
-        vdu = ""
-    elif du.isdigit() == True or (du.isdigit() == True and v.isdigit() == True):
-        vdu = coeff_multiply(v,du)
-    elif v.isdigit() == True:
-        vdu = coeff_multiply(du,v)
-    else:
-        vdu = "({0})({1})".format(v,du)
-    if u_var == dv_var and u_var != "" and u_var != None: 
-        udv = multiply(u,dv)
-    elif dv == None:
-        udv = ""
-    elif dv.isdigit() == True or (dv.isdigit() == True and u.isdigit() == True):
-        udv = coeff_multiply(u,dv)
-    elif u.isdigit() == True:
-        udv = coeff_multiply(dv,u)
-    else:
-        udv = "({0})({1})".format(u,dv)
-    if udv != "" and vdu != "":
-        x = "{0}-{1}/{2}".format(vdu,udv,v_squared)
-    elif udv == "" and vdu != "":
-        x = "{0}/{1}".format(vdu,v_squared)
-    elif udv != "" and vdu == "":
-        x = "-{0}/{1}".format(udv,v_squared)
-    double_negative = x.find("--")
-    if double_negative != -1:
-        x = x.replace("--","")
-    return x
-
-quotientdiff("x","2x^2")
-
-diff("e^2x")
-
-def productdiff(x):
-    terms = []  #start an empty array to fill with each term in the product
-    openingbracket = x.find("(")
-    closingbracket = x.find("(")
-    func = functioncheck(x)
-    var = varcheck(x)
-    coefficient = coeffcheck(x)
-    if isinstance(func,list) == True: #multiple functions diff
-        index = 0
-        while index < len(func):
-            item = func[index] #searching for string found in this index in func array
-            if isinstance(item, int) == True:
-                terms.append(x) #if it reaches the count in the func array, add x to the terms array as it is only the final term now
-                break
-            pos = x.find(item) #find that string (i.e. function) in x
-            if index == 0:
-                coefficient = x[:pos] #when on the first function, what comes before must be the coefficient
-                x = x[pos:]
-                index += 1
-            else:
-                terms.append(x[:pos]) #add what is previous to this function to terms array as a term
-                x = x[pos:] #slice off previous term so that we do not include the previous term in each new term
-                index += 1 #continue to iterate over each function
-    elif var == "e" and func != "": #e and function diff
-        funcindex = x.find(func)
-        eindex = x.find(var)
-        if eindex < funcindex:
-            coefficient = x[:eindex]
-            eterm = x[eindex:funcindex]
-            functerm = x[funcindex:]
-        elif funcindex < eindex:
-            coefficient = x[:funcindex]
-            eterm = x[eindex:]
-            functerm = x[funcindex:eindex]
-        terms.append(eterm)
-        terms.append(functerm)
-    elif var == "e" and func == "":
-        colength = len(coefficient)
-        x = x[colength:]
-        e = x.find("e^")
-        index = 0
-        indices = []
-        while index < len(x):
-            character = x[index]
-            if character == "x":
-                indices.append(index)
-            index += 1
-        if len(indices) > 1:
-            indices.append(e)
-            indices.sort()
-            if e == indices[0]:
-                coefficient 
-                xpos = x[indices[2]:]
-                if x[indices[2]-1] == "(":
-                    xpos = x[indices[2]-1:]
-                epos = x[:x.find(xpos)]
-            elif e == indices[1]:
-                xpos = x[:e]
-                epos = x[e:]
-                if x[e-1] == "(":
-                    xpos = x[:e-1]
-                    epos = x[e-1:]
-        terms.append(xpos)
-        terms.append(epos)
-    u = terms[0]
-    v = terms[1]
-    du = diff(u)
-    dv = diff(v)
-    x = "{0}({1})({2})+{0}({3})({4})".format(coefficient,u,dv,v,du)
-    return x
-
-productdiff("25(e^2x)(2x)")
-
-coeffcheck("(25x^2e^2x)")
-
-varcheck("sinxtanx")
-
-functioncheck("sinx")
-
-coeffcheck("sinxtanx")
+    return dx
 
 def diff(x):
-    ### Gathers all derivative-finding functions into one to accept any expression by routing it through the correct function ###
-    ### e.g. it can handle trig, basic, e, ln, etc ###
-    var = varcheck(x)
-    power = powercheck(x)
-    coefficient = coeffcheck(x)
-    if coefficient == "0" or coefficient == 0:
-        return None
-    function = functioncheck(x)
-    quotient = x.find("/")
-    #try statement to return None for any numbers or fractions
+    """
+    The culmination of all the work!
+    Diffentiates any term. Can be entered in any fashion, e.g. "xsinx", "e^(ln(sinx))", etc.
+    Remember always to surround powers of e and content of ln with (brackets), input
+
+    - x: Differentiable expression, e.g. "x^2e^(ln(sinx))" (str)
+
+    Returns a the first derivative of the expression
+    Currently NOT able to handle multiterm expressions, e.g. sinx + cosx
+    """
+    #Check for negative
+    if x.find("-") == 0:
+        x = x[1:]
+        negative = True
+
+    t = terms(x)
+    t = separate(t)  #Separate functions to powers e.g. sin^2x -> sinx, sinx
+
+    #Add brackets around ln powers if missing to diff correctly
+    for i in t:
+        if "ln" in i:
+            cont = i[i.index("ln")+2:]
+            inew = i[:i.index("ln")+2] + "(" + cont + ")"
+            t[t.index(i)] = inew #Replace string in terms
+
     try:
-        #if a fraction, try and make top and bottom integers, if possible return None
-        if quotient != -1:
-            top = x[:quotient]
-            bottom = x[(quotient + 1):]
-            int(top)
-            int(bottom)
-            return None
-        #if not a fraction, try and make x an integer, if possible return None
+        if negative == True:
+            t[0] = "-" + t[0]
+    except UnboundLocalError:
+        pass
+
+    dt = ""
+    i = 0
+    while i < len(t):
+        #Differentiate first expression in all ways, append rest of exps to form first product term
+        di = [funcdiff(t[0]) + varidiff(t[0]) + logdiff(t[0]) + ediff(t[0])] #Add new diff functions here
+        di.extend(t[1:])
+        #Add brackets around e powers if missing to multiply correctly
+        for j in di:
+            if "e^" in j:
+                if j[j.index("e^")+2] != "(":
+                    cont = j[j.index("e^")+2:]
+                    jnew = j[:j.index("e^")+2] + "(" + cont + ")"
+                    di[di.index(j)] = jnew #Replace string in di terms
+        if len(di) > 1:
+            di = multiply(di)
         else:
-            int(x)
-            return None
-    except ValueError:
-        if quotient != -1:
-            top = x[:quotient]
-            bottom = x[(quotient + 1):]
-            try:
-                #check if quotient can be simplified and differentiated otherwise
-                simplified = simplify(top, bottom)
-                quotientcheck = simplified.find("/")
-                #if still quotient, simplify and use quotientdiff
-                if quotientcheck != -1:
-                    q_top = simplified[:quotientcheck]
-                    q_bottom = simplified[(quotientcheck + 1):]
-                    #if cancelled to simple number fraction, return None
-                    if q_top.isdigit() == True and q_bottom.isdigit() == True:
-                        x = None
-                    else:
-                        #check if still quotient and attempt to simplify answer
-                        x = quotientdiff(q_top, q_bottom)
-                        quotientcheck = x.find("/")
-                        if quotientcheck != -1:
-                            q_top = x[:quotientcheck]
-                            q_bottom = x[(quotientcheck + 1):]
-                            try:
-                                x = simplify(q_top, q_bottom)
-                            except:
-                                pass
-                #if the simplification removed the quotient, differentiate normally
-                else:
-                    x = diff(simplified)
-            except:
-                x = quotientdiff(top, bottom)
-                x = inverse_power(x)
-        elif function != "":
-            if isinstance(function, list) == True:
-                x = productdiff(x)
-            else:
-                x = functiondiff(x, function)
-        elif len(var) == 1 and var != "e" and var.isdigit() == False:
-            x = basicdiff(x)
-        elif var == "e":
-            x = ediff(coefficient,power)
-        return x
-
-### Will not work if you surround the expression with brackets e.g. (sin4x), (2x^2)
-diff("(5x)/(5-x)") 
-
-def maclaurin_expand(x, order):
-    term = 0
-    #if user inputs order as a string, convert to integer
-    if isinstance(order, str) == True:
-        order = int(order)
-    for term in range(order+1):
-        if term == 0:
-            #if quotient, simplify if possible
-            quotient = x.find("/")
-            if quotient != -1:
-                top = x[:quotient]
-                bottom = x[(quotient + 1):]
-                x = simplify(top,bottom)
-            print(x)
-        elif term == 1:
-            x = diff(x)
-            if x[0] == "-":
-                print("({0})(x)".format(x))
-            else:
-                print("+({0})(x)".format(x))
+            di = di[0]
+        t = rotate(t)
+        if dt == "":
+            dt += di
         else:
-            x = diff(x)
-            top = "({0})(x^{1})".format(x,term)
-            bottom = math.factorial(term)
-            newterm = simplify(x, bottom)
-            newterm = "{0}(x^{1})".format(newterm,term)
-            #break from series if a derivative turns up None i.e. diff(4) -> None
-            nonecheck = newterm.find("None")
-            if nonecheck != -1:
-                print("Series finished (cannot differentiate further)")
-                break
-            cut_newterm = newterm.replace("(","")
-            cut_newterm = cut_newterm.replace(")","") 
-            cut_newterm = cut_newterm.replace(" ","")
-            if cut_newterm[0] == "-":
-                print(newterm)
+            if di.find("-") == 0:
+                dt += " - {0}".format(di[1:])
             else:
-                print("+{0}".format(newterm))
-        term += 1
+                dt += " + {0}".format(di)
+        i += 1
+    if dt.find(")") == len(dt)-1 and dt.find("(") == 0:
+        return dt[1:-1]
+    else:
+        return dt
+##############################################
 
-maclaurin_expand("lnx","4")
+### TESTING ##################################
+res = []
 
-functioncheck("cosxsinx")
+thelist = ["1","x","2x","x^2","2x^2","10x^2","10x^10","x^-2","sinx","cosx","tanx","cscx","secx","cotx",
+"2sinx","2cosx","2tanx","2cscx","2secx","2cotx","sin2x","2sin2x","cos2x","2cos2x","tan2x","2tan2x","csc2x",
+"2csc2x","sec2x","2sec2x","cot2x","2cot2x","sinx^2","cosx^2","tanx^2","cscx^2","secx^2","cotx^2","2sinx^2",
+"2cosx^2","2tanx^2","2cscx^2","2secx^2","2cotx^2","2xsin2x","2xcos2x","2xtan2x","2xcsc2x","2xsec2x","2xcot2x",
+"xsinx","xcosx","xtanx","xcscx","xsecx","xcotx","x^2sinx","x^2cosx","x^2tanx","x^2cscx","x^2secx","x^2cotx",
+"sin^2x","cos^2x","tan^2x","csc^2x","sec^2x","cot^2x","sinxcosx","sinxtanx","sinxcscx","sinxsecx","sinxcotx",
+"e^(x)","e^(2x)","e^(x^2)","e^(2x^2)","2e^(x)","2e^(2x)","2e^(x^2)","2e^(2x^2)","e^(lnx)","e^(0)","e^(5)",
+"e^(lnx^2)","e^(2lnx)","e^(ln2x)","e^(2ln2x)","e^(2lnx^2)","e^(ln2x)","e^(sinx)","e^(cosx)","e^(tanx)",
+"e^(cscx)","e^(secx)","e^(cotx)","2e^(lnx)","2e^(2lnx)","2e^(ln2x)","2e^(2ln2x)","2e^(lnx^2)","2e^(2lnx^2)",
+"e^(lnsinx)","e^(lncosx)","e^(lntanx)","e^(lncscx)","e^(lnsecx)","e^(lncotx)","2e^(lnsinx)","2e^(lncosx)",
+"2e^(lntanx)","2e^(lncscx)","2e^(lnsecx)","2e^(lncotx)","2e^(2lnsinx)","2e^(2lncosx)","2e^(2lntanx)","2e^(lncscx)",
+"2e^(2lnsecx)","2e^(2lncotx)","e^(2sinx)","e^(2cosx)","e^(2tanx)","e^(2cscx)","e^(2secx)","e^(2cotx)","2e^(sinx)",
+"2e^(cosx)","2e^(tanx)","2e^(cscx)","2e^(secx)","2e^(cotx)","xe^(x)","x^2e^(x)","2xe^(x)","xe^(x^2)","2xe^(sinx)",
+"2xe^(cosx)","2xe^(tanx)","2xe^(cscx)","2xe^(secx)","2xe^(cotx)","e^(sin^2x)","e^(cos^2x)","e^(tan^2x)",
+"e^(csc^2x)","e^(sec^2x)","e^(cot^2x)","x^2e^(sin^2x)","x^2e^(cos^2x)","x^2e^(tan^2x)","x^2e^(csc^2x)",
+"x^2e^(sec^2x)","x^2e^(cot^2x)","2x^2e^(sin^2x)","2x^2e^(cos^2x)","2x^2e^(tan^2x)","2x^2e^(csc^2x)","2x^2e^(sec^2x)",
+"2x^2e^(cot^2x)","e^(lnsin^2x)","e^(lncos^2x)","e^(lntan^2x)","e^(lncsc^2x)","e^(lnsec^2x)","e^(lncot^2x)",
+"2e^(lnsin^2x)","2e^(lncos^2x)","2e^(lntan^2x)","2e^(lncsc^2x)","2e^(lnsec^2x)","2e^(lncot^2x)","ln(x)","ln(2x)",
+"ln(x^2)","ln(2x^2)","2ln(x)","2ln(2x)","2ln(x^2)","2ln(2x^2)","xln(x)","xln(2x)","xln(x^2)","xln(2x^2)","2xln(x)",
+"2xln(2x)","2xln(x^2)","2xln(2x^2)","x^2ln(x)","x^2ln(2x)","x^2ln(x^2)","x^2ln(2x^2)","2x^2ln(x)","2x^2ln(2x)",
+"2x^2ln(x^2)","2x^2ln(2x^2)","ln(sinx)","ln(cosx)","ln(tanx)","ln(cscx)","ln(secx)","ln(cotx)","2ln(sinx)",
+"2ln(cosx)","2ln(tanx)","2ln(cscx)","2ln(secx)","2ln(cotx)"]
+
+for i in thelist:
+    try:
+        res.append("{0} -> {1}".format(i,diff(i)))
+    except:
+        res.append("Error for: {0}".format(i))
+
+for i in res:
+    print(i)
+##############################################
